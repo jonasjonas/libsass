@@ -13,29 +13,29 @@ namespace Sass {
 
   class Cssize : public Operation_CRTP<Statement*, Cssize> {
 
-    Context&                 ctx;
-    std::vector<Block*>      block_stack;
-    std::vector<Statement*>  p_stack;
-    Backtrace*               backtrace;
+    Context&                    ctx;
+    std::vector<Block*>         block_stack;
+    std::vector<Statement*>     p_stack;
+    Backtrace*                  backtrace;
 
     Statement* fallback_impl(AST_Node* n);
 
   public:
     Cssize(Context&, Backtrace*);
-    virtual ~Cssize() { }
+    ~Cssize() { }
 
-    using Operation<Statement*>::operator();
+    CommaSequence_Selector* selector();
 
     Statement* operator()(Block*);
     Statement* operator()(Ruleset*);
-    // Statement* operator()(Propset*);
     // Statement* operator()(Bubble*);
     Statement* operator()(Media_Block*);
     Statement* operator()(Supports_Block*);
     Statement* operator()(At_Root_Block*);
-    Statement* operator()(At_Rule*);
+    Statement* operator()(Directive*);
     Statement* operator()(Keyframe_Rule*);
-    // Statement* operator()(Declaration*);
+    Statement* operator()(Trace*);
+    Statement* operator()(Declaration*);
     // Statement* operator()(Assignment*);
     // Statement* operator()(Import*);
     // Statement* operator()(Import_Stub*);
@@ -55,7 +55,7 @@ namespace Sass {
 
     Statement* parent();
     std::vector<std::pair<bool, Block*>> slice_by_bubble(Statement*);
-    Statement* bubble(At_Rule*);
+    Statement* bubble(Directive*);
     Statement* bubble(At_Root_Block*);
     Statement* bubble(Media_Block*);
     Statement* bubble(Supports_Block*);

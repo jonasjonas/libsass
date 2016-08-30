@@ -11,11 +11,11 @@ namespace Sass {
   class Statement;
   class Block;
   class Ruleset;
-  class Propset;
   class Bubble;
+  class Trace;
   class Media_Block;
   class Supports_Block;
-  class At_Rule;
+  class Directive;
   class Keyframe_Rule;
   class At_Root_Block;
   class Declaration;
@@ -62,7 +62,7 @@ namespace Sass {
   class Supports_Negation;
   class Supports_Declaration;
   class Supports_Interpolation;
-  class At_Root_Expression;
+  class At_Root_Query;
   class Null;
   class Parent_Selector;
   // parameters and arguments
@@ -73,15 +73,16 @@ namespace Sass {
   // selectors
   class Selector;
   class Selector_Schema;
-  class Selector_Placeholder;
-  class Type_Selector;
-  class Selector_Qualifier;
+  class Placeholder_Selector;
+  class Element_Selector;
+  class Class_Selector;
+  class Id_Selector;
   class Attribute_Selector;
   class Pseudo_Selector;
   class Wrapped_Selector;
-  class Compound_Selector;
-  class Complex_Selector;
-  class Selector_List;
+  class SimpleSequence_Selector;
+  class Sequence_Selector;
+  class CommaSequence_Selector;
 
   // common classes
   class Context;

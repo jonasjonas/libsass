@@ -1,15 +1,15 @@
 #ifndef SASS_EVAL_H
 #define SASS_EVAL_H
 
+#include "ast.hpp"
 #include "context.hpp"
-#include "listize.hpp"
 #include "operation.hpp"
+#include "environment.hpp"
 
 namespace Sass {
 
   class Expand;
   class Context;
-  class Listize;
 
   class Eval : public Operation_CRTP<Expression*, Eval> {
 
@@ -19,16 +19,16 @@ namespace Sass {
    public:
     Expand&  exp;
     Context& ctx;
-    Listize  listize;
     Eval(Expand& exp);
-    virtual ~Eval();
+    ~Eval();
+
+    bool force;
+    bool is_in_comment;
 
     Env* environment();
     Context& context();
-    Selector_List* selector();
+    CommaSequence_Selector* selector();
     Backtrace* backtrace();
-
-    using Operation<Expression*>::operator();
 
     // for evaluating function bodies
     Expression* operator()(Block*);
@@ -51,14 +51,15 @@ namespace Sass {
     Expression* operator()(Variable*);
     Expression* operator()(Textual*);
     Expression* operator()(Number*);
+    Expression* operator()(Color*);
     Expression* operator()(Boolean*);
     Expression* operator()(String_Schema*);
     Expression* operator()(String_Quoted*);
     Expression* operator()(String_Constant*);
-    // Expression* operator()(Selector_List*);
+    // Expression* operator()(CommaSequence_Selector*);
     Expression* operator()(Media_Query*);
     Expression* operator()(Media_Query_Expression*);
-    Expression* operator()(At_Root_Expression*);
+    Expression* operator()(At_Root_Query*);
     Expression* operator()(Supports_Operator*);
     Expression* operator()(Supports_Negation*);
     Expression* operator()(Supports_Declaration*);
@@ -69,17 +70,18 @@ namespace Sass {
     Expression* operator()(Comment*);
 
     // these will return selectors
-    Selector_List* operator()(Selector_List*);
-    Selector_List* operator()(Complex_Selector*);
+    CommaSequence_Selector* operator()(CommaSequence_Selector*);
+    CommaSequence_Selector* operator()(Sequence_Selector*);
     Attribute_Selector* operator()(Attribute_Selector*);
     // they don't have any specific implementatio (yet)
-    Type_Selector* operator()(Type_Selector* s) { return s; };
+    Element_Selector* operator()(Element_Selector* s) { return s; };
     Pseudo_Selector* operator()(Pseudo_Selector* s) { return s; };
     Wrapped_Selector* operator()(Wrapped_Selector* s) { return s; };
-    Selector_Qualifier* operator()(Selector_Qualifier* s) { return s; };
-    Selector_Placeholder* operator()(Selector_Placeholder* s) { return s; };
+    Class_Selector* operator()(Class_Selector* s) { return s; };
+    Id_Selector* operator()(Id_Selector* s) { return s; };
+    Placeholder_Selector* operator()(Placeholder_Selector* s) { return s; };
     // actual evaluated selectors
-    Selector_List* operator()(Selector_Schema*);
+    CommaSequence_Selector* operator()(Selector_Schema*);
     Expression* operator()(Parent_Selector*);
 
     template <typename U>
@@ -87,16 +89,16 @@ namespace Sass {
 
     // -- only need to define two comparisons, and the rest can be implemented in terms of them
     static bool eq(Expression*, Expression*);
-    static bool lt(Expression*, Expression*);
+    static bool lt(Expression*, Expression*, std::string op);
     // -- arithmetic on the combinations that matter
-    static Value* op_numbers(Memory_Manager&, enum Sass_OP, const Number&, const Number&, bool compressed = false, int precision = 5, ParserState* pstate = 0);
-    static Value* op_number_color(Memory_Manager&, enum Sass_OP, const Number&, const Color&, bool compressed = false, int precision = 5, ParserState* pstate = 0);
-    static Value* op_color_number(Memory_Manager&, enum Sass_OP, const Color&, const Number&, bool compressed = false, int precision = 5, ParserState* pstate = 0);
-    static Value* op_colors(Memory_Manager&, enum Sass_OP, const Color&, const Color&, bool compressed = false, int precision = 5, ParserState* pstate = 0);
-    static Value* op_strings(Memory_Manager&, enum Sass_OP, Value&, Value&, bool compressed = false, int precision = 5, ParserState* pstate = 0);
+    static Value* op_numbers(Memory_Manager&, enum Sass_OP, const Number&, const Number&, struct Sass_Inspect_Options opt, ParserState* pstate = 0);
+    static Value* op_number_color(Memory_Manager&, enum Sass_OP, const Number&, const Color&, struct Sass_Inspect_Options opt, ParserState* pstate = 0);
+    static Value* op_color_number(Memory_Manager&, enum Sass_OP, const Color&, const Number&, struct Sass_Inspect_Options opt, ParserState* pstate = 0);
+    static Value* op_colors(Memory_Manager&, enum Sass_OP, const Color&, const Color&, struct Sass_Inspect_Options opt, ParserState* pstate = 0);
+    static Value* op_strings(Memory_Manager&, Sass::Operand, Value&, Value&, struct Sass_Inspect_Options opt, ParserState* pstate = 0, bool interpolant = false);
 
   private:
-    std::string interpolation(Expression* s, bool into_quotes = false);
+    void interpolation(Context& ctx, std::string& res, Expression* ex, bool into_quotes, bool was_itpl = false);
 
   };
 

@@ -1,9 +1,9 @@
+#include "sass.hpp"
 #include <iostream>
 #include <typeinfo>
 #include <vector>
 
 #include "cssize.hpp"
-#include "to_string.hpp"
 #include "context.hpp"
 #include "backtrace.hpp"
 
@@ -14,7 +14,7 @@ namespace Sass {
     block_stack(std::vector<Block*>()),
     p_stack(std::vector<Statement*>()),
     backtrace(bt)
-  {  }
+  { }
 
   Statement* Cssize::parent()
   {
@@ -31,7 +31,51 @@ namespace Sass {
     return bb;
   }
 
-  Statement* Cssize::operator()(At_Rule* r)
+  Statement* Cssize::operator()(Trace* t)
+  {
+    return t->block()->perform(this);
+  }
+
+  Statement* Cssize::operator()(Declaration* d)
+  {
+    String* property = dynamic_cast<String*>(d->property());
+
+    if (Declaration* dd = dynamic_cast<Declaration*>(parent())) {
+      String* parent_property = dynamic_cast<String*>(dd->property());
+      property = SASS_MEMORY_NEW(ctx.mem, String_Constant,
+                                 d->property()->pstate(),
+                                 parent_property->to_string() + "-" + property->to_string());
+      if (!dd->value()) {
+        d->tabs(dd->tabs() + 1);
+      }
+    }
+
+    Declaration* dd = SASS_MEMORY_NEW(ctx.mem, Declaration,
+                                      d->pstate(),
+                                      property,
+                                      d->value(),
+                                      d->is_important());
+    dd->is_indented(d->is_indented());
+    dd->tabs(d->tabs());
+
+    p_stack.push_back(dd);
+    Block* bb = d->block() ? d->block()->perform(this)->block() : 0;
+    p_stack.pop_back();
+
+    if (bb && bb->length()) {
+      if (dd->value() && !dd->value()->is_invisible()) {
+        bb->unshift(dd);
+      }
+      return bb;
+    }
+    else if (dd->value() && !dd->value()->is_invisible()) {
+      return dd;
+    }
+
+    return 0;
+  }
+
+  Statement* Cssize::operator()(Directive* r)
   {
     if (!r->block() || !r->block()->length()) return r;
 
@@ -41,7 +85,7 @@ namespace Sass {
     }
 
     p_stack.push_back(r);
-    At_Rule* rr = SASS_MEMORY_NEW(ctx.mem, At_Rule,
+    Directive* rr = SASS_MEMORY_NEW(ctx.mem, Directive,
                                   r->pstate(),
                                   r->keyword(),
                                   r->selector(),
@@ -57,7 +101,7 @@ namespace Sass {
       else {
         s = static_cast<Bubble*>(s)->node();
         if (s->statement_type() != Statement::DIRECTIVE) directive_exists = false;
-        else directive_exists = (static_cast<At_Rule*>(s)->keyword() == rr->keyword());
+        else directive_exists = (static_cast<Directive*>(s)->keyword() == rr->keyword());
       }
 
     }
@@ -65,7 +109,7 @@ namespace Sass {
     Block* result = SASS_MEMORY_NEW(ctx.mem, Block, rr->pstate());
     if (!(directive_exists || rr->is_keyframes()))
     {
-      At_Rule* empty_node = static_cast<At_Rule*>(rr);
+      Directive* empty_node = static_cast<Directive*>(rr);
       empty_node->block(SASS_MEMORY_NEW(ctx.mem, Block, rr->block() ? rr->block()->pstate() : rr->pstate()));
       *result << empty_node;
     }
@@ -93,12 +137,27 @@ namespace Sass {
   Statement* Cssize::operator()(Ruleset* r)
   {
     p_stack.push_back(r);
+    // this can return a string schema
+    // string schema is not a statement!
+    // r->block() is already a string schema
+    // and that is comming from propset expand
+    Statement* stmt = r->block()->perform(this);
+    // this should protect us (at least a bit) from our mess
+    // fixing this properly is harder that it should be ...
+    if (dynamic_cast<Statement*>((AST_Node*)stmt) == NULL) {
+      error("Illegal nesting: Only properties may be nested beneath properties.", r->block()->pstate());
+    }
     Ruleset* rr = SASS_MEMORY_NEW(ctx.mem, Ruleset,
                                   r->pstate(),
                                   r->selector(),
-                                  r->block()->perform(this)->block());
+                                  stmt->block());
+    rr->is_root(r->is_root());
     // rr->tabs(r->block()->tabs());
     p_stack.pop_back();
+
+    if (!rr->block()) {
+      error("Illegal nesting: Only properties may be nested beneath properties.", r->block()->pstate());
+    }
 
     Block* props = SASS_MEMORY_NEW(ctx.mem, Block, rr->block()->pstate());
     Block* rules = SASS_MEMORY_NEW(ctx.mem, Block, rr->block()->pstate());
@@ -209,7 +268,7 @@ namespace Sass {
     return bubble(m);
   }
 
-  Statement* Cssize::bubble(At_Rule* m)
+  Statement* Cssize::bubble(Directive* m)
   {
     Block* bb = SASS_MEMORY_NEW(ctx.mem, Block, this->parent()->pstate());
     Has_Block* new_rule = static_cast<Has_Block*>(shallow_copy(this->parent()));
@@ -223,7 +282,7 @@ namespace Sass {
 
     Block* wrapper_block = SASS_MEMORY_NEW(ctx.mem, Block, m->block() ? m->block()->pstate() : m->pstate());
     *wrapper_block << new_rule;
-    At_Rule* mm = SASS_MEMORY_NEW(ctx.mem, At_Rule,
+    Directive* mm = SASS_MEMORY_NEW(ctx.mem, Directive,
                                   m->pstate(),
                                   m->keyword(),
                                   m->selector(),
@@ -370,7 +429,7 @@ namespace Sass {
       case Statement::BUBBLE:
         return SASS_MEMORY_NEW(ctx.mem, Bubble, *static_cast<Bubble*>(s));
       case Statement::DIRECTIVE:
-        return SASS_MEMORY_NEW(ctx.mem, At_Rule, *static_cast<At_Rule*>(s));
+        return SASS_MEMORY_NEW(ctx.mem, Directive, *static_cast<Directive*>(s));
       case Statement::SUPPORTS:
         return SASS_MEMORY_NEW(ctx.mem, Supports_Block, *static_cast<Supports_Block*>(s));
       case Statement::ATROOT:
@@ -513,15 +572,14 @@ namespace Sass {
 
   Media_Query* Cssize::merge_media_query(Media_Query* mq1, Media_Query* mq2)
   {
-    To_String to_string(&ctx);
 
     std::string type;
     std::string mod;
 
     std::string m1 = std::string(mq1->is_restricted() ? "only" : mq1->is_negated() ? "not" : "");
-    std::string t1 = mq1->media_type() ? mq1->media_type()->perform(&to_string) : "";
+    std::string t1 = mq1->media_type() ? mq1->media_type()->to_string(ctx.c_options) : "";
     std::string m2 = std::string(mq2->is_restricted() ? "only" : mq1->is_negated() ? "not" : "");
-    std::string t2 = mq2->media_type() ? mq2->media_type()->perform(&to_string) : "";
+    std::string t2 = mq2->media_type() ? mq2->media_type()->to_string(ctx.c_options) : "";
 
 
     if (t1.empty()) t1 = t2;

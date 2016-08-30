@@ -21,7 +21,7 @@ namespace Sass {
     To_Value(Context& ctx, Memory_Manager& mem)
     : ctx(ctx), mem(mem)
     { }
-    virtual ~To_Value() { }
+    ~To_Value() { }
     using Operation<Value*>::operator();
 
     Value* operator()(Argument*);
@@ -37,7 +37,7 @@ namespace Sass {
     Value* operator()(Null*);
 
     // convert to string via `To_String`
-    Value* operator()(Selector_List*);
+    Value* operator()(CommaSequence_Selector*);
     Value* operator()(Binary_Expression*);
 
     // fallback throws error
