@@ -5,44 +5,74 @@
 #include <set>
 
 #include "ast.hpp"
+#include "node.hpp"
 #include "operation.hpp"
 #include "subset_map.hpp"
+#include "ast_fwd_decl.hpp"
 
 namespace Sass {
 
-  class Context;
-  class Node;
-
-  typedef Subset_Map<std::string, std::pair<Sequence_Selector*, SimpleSequence_Selector*> > ExtensionSubsetMap;
+  Node subweave(Node& one, Node& two);
 
   class Extend : public Operation_CRTP<void, Extend> {
 
-    Context&            ctx;
-    ExtensionSubsetMap& subset_map;
+    Subset_Map& subset_map;
 
-    void fallback_impl(AST_Node* n) { }
+    void fallback_impl(AST_Node_Ptr n) { }
+
+  private:
+
+    std::unordered_map<
+      Selector_List_Obj, // key
+      Selector_List_Obj, // value
+      HashNodes, // hasher
+      CompareNodes // compare
+    > memoizeList;
+
+    std::unordered_map<
+      Complex_Selector_Obj, // key
+      Node, // value
+      HashNodes, // hasher
+      CompareNodes // compare
+    > memoizeComplex;
+
+    /* this turned out to be too much overhead
+       re-evaluate once we store an ast selector
+    std::unordered_map<
+      Compound_Selector_Obj, // key
+      Node, // value
+      HashNodes, // hasher
+      CompareNodes // compare
+    > memoizeCompound;
+    */
+
+    void extendObjectWithSelectorAndBlock(Ruleset_Ptr pObject);
+    Node extendComplexSelector(Complex_Selector_Ptr sel, CompoundSelectorSet& seen, bool isReplace, bool isOriginal);
+    Node extendCompoundSelector(Compound_Selector_Ptr sel, CompoundSelectorSet& seen, bool isReplace);
+    bool complexSelectorHasExtension(Complex_Selector_Ptr selector, CompoundSelectorSet& seen);
+    Node trim(Node& seqses, bool isReplace);
+    Node weave(Node& path);
 
   public:
-    static Node subweave(Node& one, Node& two, Context& ctx);
-    static CommaSequence_Selector* extendSelectorList(CommaSequence_Selector* pSelectorList, Context& ctx, ExtensionSubsetMap& subset_map, bool isReplace, bool& extendedSomething, std::set<SimpleSequence_Selector>& seen);
-    static CommaSequence_Selector* extendSelectorList(CommaSequence_Selector* pSelectorList, Context& ctx, ExtensionSubsetMap& subset_map, bool isReplace, bool& extendedSomething);
-    static CommaSequence_Selector* extendSelectorList(CommaSequence_Selector* pSelectorList, Context& ctx, ExtensionSubsetMap& subset_map, bool isReplace = false) {
+    Selector_List_Ptr extendSelectorList(Selector_List_Obj pSelectorList, bool isReplace, bool& extendedSomething, CompoundSelectorSet& seen);
+    Selector_List_Ptr extendSelectorList(Selector_List_Obj pSelectorList, bool isReplace = false) {
       bool extendedSomething = false;
-      return extendSelectorList(pSelectorList, ctx, subset_map, isReplace, extendedSomething);
+      CompoundSelectorSet seen;
+      return extendSelectorList(pSelectorList, isReplace, extendedSomething, seen);
     }
-    static CommaSequence_Selector* extendSelectorList(CommaSequence_Selector* pSelectorList, Context& ctx, ExtensionSubsetMap& subset_map, std::set<SimpleSequence_Selector>& seen) {
+    Selector_List_Ptr extendSelectorList(Selector_List_Obj pSelectorList, CompoundSelectorSet& seen) {
       bool isReplace = false;
       bool extendedSomething = false;
-      return extendSelectorList(pSelectorList, ctx, subset_map, isReplace, extendedSomething, seen);
+      return extendSelectorList(pSelectorList, isReplace, extendedSomething, seen);
     }
-    Extend(Context&, ExtensionSubsetMap&);
+    Extend(Subset_Map&);
     ~Extend() { }
 
-    void operator()(Block*);
-    void operator()(Ruleset*);
-    void operator()(Supports_Block*);
-    void operator()(Media_Block*);
-    void operator()(Directive*);
+    void operator()(Block_Ptr);
+    void operator()(Ruleset_Ptr);
+    void operator()(Supports_Block_Ptr);
+    void operator()(Media_Block_Ptr);
+    void operator()(Directive_Ptr);
 
     template <typename U>
     void fallback(U x) { return fallback_impl(x); }
